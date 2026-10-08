@@ -28,7 +28,7 @@ export class AccountService {
     private readonly users: UserRepository,
     private readonly districts: DistrictRepository,
     private readonly tokens: TokenService,
-  ) {}
+  ) { }
 
   async register(registration: Registration): Promise<PublicUser> {
     const { nationalId, password, firstName, lastName, address, districtId } = registration;
