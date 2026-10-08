@@ -2,8 +2,10 @@ import { AccountService, Registration } from '../../src/services/accountService'
 import { TokenService } from '../../src/auth/tokenService';
 import { DistrictRepository } from '../../src/repositories/districtRepository';
 import { UserRepository } from '../../src/repositories/userRepository';
-import { ValidationError } from '../../src/errors';
-import { verifyPassword } from '../../src/auth/passwords';
+import { ConflictError, UnauthorizedError, ValidationError } from '../../src/errors';
+import { hashPassword, verifyPassword } from '../../src/auth/passwords';
+import { NewUser } from '../../src/repositories/userRepository';
+import { Role, User } from '../../src/domain/types';
 
 // ข้อมูลสมัครที่ถูกต้องทุกช่อง แต่ละ test เปลี่ยนเฉพาะช่องที่สนใจ
 const validRegistration: Registration = {
@@ -20,6 +22,46 @@ const dummyTokens: TokenService = {
   issue: () => { throw new Error('dummy should not be used'); },
   verify: () => { throw new Error('dummy should not be used'); },
 };
+// Fake: UserRepository ที่เก็บข้อมูลใน array แทน Postgres ทำงานได้จริงแต่ไม่มี I/O
+class InMemoryUserRepository implements UserRepository {
+  private users: User[] = [];
+
+  async findById(id: number) {
+    return this.users.find((u) => u.id === id) ?? null;
+  }
+  async findByNationalId(nationalId: string) {
+    return this.users.find((u) => u.nationalId === nationalId) ?? null;
+  }
+  async create(input: NewUser) {
+    const user: User = { ...input, id: this.users.length + 1, role: 'VOTER' };
+    this.users.push(user);
+    return user;
+  }
+  async updateRole(id: number, role: Role) {
+    const user = this.users.find((u) => u.id === id);
+    if (!user) return null;
+    user.role = role;
+    return user;
+  }
+}
+
+// Stub: เขต CM-1 มีอยู่จริง ใช้ร่วมกันในหลาย test
+const districtCM1 = (): DistrictRepository => ({
+  findAll: jest.fn(),
+  findById: jest.fn().mockResolvedValue({ id: 'CM-1', province: 'เชียงใหม่', number: 1 }),
+});
+
+// user ที่สมัครไว้แล้ว รหัสผ่าน voter1234
+const existingVoter = (): User => ({
+  id: 7,
+  nationalId: '1509900000017',
+  passwordHash: hashPassword('voter1234'),
+  firstName: 'Somchai',
+  lastName: 'Jaidee',
+  address: '1 Nimman Rd',
+  districtId: 'CM-1',
+  role: 'VOTER',
+});
 // Lab 03 — replace each it.todo with a real test. See labs/03-test-doubles/README.md
 describe('AccountService', () => {
   describe('register', () => {
@@ -88,16 +130,99 @@ describe('AccountService', () => {
       expect(verifyPassword('voter1234', saved.passwordHash)).toBe(true);
     });
 
-    it.todo('rejects a national id that is already registered (fake UserRepository)');
-    it.todo('does not save anything when the national id is invalid (mock: create not called)');
+    it('rejects a national id that is already registered', async () => {
+      // Fake: users จำได้ว่าสมัครไปแล้ว ถ้าใช้ stub ต้องสั่งให้ตอบ null ครั้งแรกแล้วตอบ user ครั้งที่สอง ซึ่งยุ่ง
+      const users = new InMemoryUserRepository();
+      // Stub: เขต CM-1 มีอยู่จริง
+      // Dummy: dummyTokens register ไม่ได้ใช้
+      const service = new AccountService(users, districtCM1(), dummyTokens);
+      await service.register(validRegistration);
+
+      const registeringAgain = service.register(validRegistration);
+
+      await expect(registeringAgain).rejects.toThrow(ConflictError);
+    });
+
+    it('does not save anything when the national id is invalid', async () => {
+      // Mock: create ต้องไม่ถูกเรียกเลย การไม่เรียกคือพฤติกรรมที่เทส
+      const create = jest.fn();
+
+      const users: UserRepository = {
+        findById: jest.fn(),
+        findByNationalId: jest.fn().mockResolvedValue(null),
+        create,
+        updateRole: jest.fn(),
+      };
+      // Stub: เขต CM-1 มีอยู่จริง
+      // Dummy: dummyTokens register ไม่ได้ใช้
+      const service = new AccountService(users, districtCM1(), dummyTokens);
+
+      const registering = service.register({ ...validRegistration, nationalId: '1509900000018' });
+
+      await expect(registering).rejects.toThrow(ValidationError);
+      expect(create).not.toHaveBeenCalled();
+    });
   });
 
   describe('login', () => {
-    it.todo('issues a token for the user (mock TokenService.issue called with the principal)');
-    it.todo('rejects a wrong password without issuing a token');
+    it('issues a token for the user', async () => {
+      // Stub: users คืน voter ที่สมัครไว้แล้ว
+      const users: UserRepository = {
+        findById: jest.fn(),
+        findByNationalId: jest.fn().mockResolvedValue(existingVoter()),
+        create: jest.fn(),
+        updateRole: jest.fn(),
+      };
+      // Mock: issue ต้องถูกเรียกด้วย principal ของ user คนนี้
+      const issue = jest.fn().mockReturnValue('token-123');
+      const tokens: TokenService = { issue, verify: jest.fn() };
+      // Dummy: districts login ไม่ได้ใช้
+      const service = new AccountService(users, {} as DistrictRepository, tokens);
+
+      const token = await service.login('1509900000017', 'voter1234');
+
+      expect(issue).toHaveBeenCalledWith({ userId: 7, role: 'VOTER', districtId: 'CM-1' });
+      expect(token).toBe('token-123');
+    });
+
+    it('rejects a wrong password without issuing a token', async () => {
+      // Stub: users คืน voter ที่สมัครไว้แล้ว
+      const users: UserRepository = {
+        findById: jest.fn(),
+        findByNationalId: jest.fn().mockResolvedValue(existingVoter()),
+        create: jest.fn(),
+        updateRole: jest.fn(),
+      };
+      // Mock: issue ต้องไม่ถูกเรียก รหัสผิดห้ามได้ token
+      const issue = jest.fn();
+      const tokens: TokenService = { issue, verify: jest.fn() };
+      // Dummy: districts login ไม่ได้ใช้
+      const service = new AccountService(users, {} as DistrictRepository, tokens);
+
+      const loggingIn = service.login('1509900000017', 'wrong-password');
+
+      await expect(loggingIn).rejects.toThrow(UnauthorizedError);
+      expect(issue).not.toHaveBeenCalled();
+    });
   });
 
   describe('changeRole', () => {
-    it.todo('refuses to make anyone an ADMIN');
+    it('refuses to make anyone an ADMIN', async () => {
+      // Mock: updateRole ต้องไม่ถูกเรียก ต้องปฏิเสธก่อนถึง db
+      const updateRole = jest.fn();
+      const users: UserRepository = {
+        findById: jest.fn(),
+        findByNationalId: jest.fn(),
+        create: jest.fn(),
+        updateRole,
+      };
+      // Dummy: districts กับ tokens changeRole ไม่ได้ใช้
+      const service = new AccountService(users, {} as DistrictRepository, dummyTokens);
+
+      const changing = service.changeRole(7, 'ADMIN');
+
+      await expect(changing).rejects.toThrow(ValidationError);
+      expect(updateRole).not.toHaveBeenCalled();
+    });
   });
 });
