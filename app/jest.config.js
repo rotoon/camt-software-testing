@@ -24,5 +24,20 @@ module.exports = {
       testMatch: ['<rootDir>/test/integration/**/*.test.ts'],
       setupFiles: ['<rootDir>/test/integration/env.ts'],
     },
+    {
+      displayName: 'unit',
+      testEnvironment: 'node',
+      transform: tsJest,
+      testMatch: ['<rootDir>/test/unit/**/*.test.ts'],
+      setupFilesAfterEnv: ['<rootDir>/test/support/fakerSeed.ts'],
+    },
+    {
+      displayName: 'integration',
+      testEnvironment: 'node',
+      transform: tsJest,
+      testMatch: ['<rootDir>/test/integration/**/*.test.ts'],
+      setupFiles: ['<rootDir>/test/integration/env.ts'],
+      setupFilesAfterEnv: ['<rootDir>/test/support/fakerSeed.ts'],
+    },
   ],
 };
