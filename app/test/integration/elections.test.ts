@@ -27,10 +27,39 @@ describe('election management (component)', () => {
   });
 
   describe('POST /parties', () => {
-    it.todo('lets a commissioner create a party');
-    it.todo('forbids a voter (403)');
-    it.todo('requires a token (401)');
-    it.todo('rejects a duplicate party name (409)');
+    const newParty = { name: 'พรรคทดสอบ', policy: 'นโยบายทดสอบ' };
+
+    it('lets a commissioner create a party', async () => {
+      const commissioner = await db.user(aCommissioner());
+
+      const res = await request(app).post('/parties').set('Authorization', authHeader(commissioner)).send(newParty);
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ name: 'พรรคทดสอบ' });
+    });
+
+    it('forbids a voter (403)', async () => {
+      const voter = await db.user(aVoter());
+
+      const res = await request(app).post('/parties').set('Authorization', authHeader(voter)).send(newParty);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('requires a token (401)', async () => {
+      const res = await request(app).post('/parties').send(newParty);
+
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects a duplicate party name (409)', async () => {
+      const commissioner = await db.user(aCommissioner());
+      await db.party(aParty().named('พรรคทดสอบ'));
+
+      const res = await request(app).post('/parties').set('Authorization', authHeader(commissioner)).send(newParty);
+
+      expect(res.status).toBe(409);
+    });
   });
 
   describe('POST /districts/:id/candidates', () => {
