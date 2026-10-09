@@ -62,15 +62,45 @@ describe('election management (component)', () => {
     });
   });
 
-  describe('POST /districts/:id/candidates', () => {
-    it.todo('adds a candidate that then appears in the public results of that district');
+  it('adds a candidate that then appears in the public results of that district', async () => {
+    const commissioner = await db.user(aCommissioner());
+    const party = await db.party(aParty());
+
+    const added = await request(app)
+      .post('/districts/CM-1/candidates')
+      .set('Authorization', authHeader(commissioner))
+      .send({ partyId: party.id, number: 3, firstName: 'สมหญิง', lastName: 'ใจงาม' });
+    const results = await request(app).get('/districts/CM-1/results');
+
+    expect(added.status).toBe(201);
+    expect(results.body.candidates).toEqual([
+      expect.objectContaining({ number: 3, firstName: 'สมหญิง', partyName: party.name }),
+    ]);
   });
 
-  describe('PATCH /admin/users/:id/role', () => {
-    it.todo('lets an admin promote a voter to commissioner');
+  it('lets an admin promote a voter to commissioner', async () => {
+    const admin = await db.user(anAdmin());
+    const voter = await db.user(aVoter());
+
+    const res = await request(app)
+      .patch(`/admin/users/${voter.id}/role`)
+      .set('Authorization', authHeader(admin))
+      .send({ role: 'COMMISSIONER' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: voter.id, role: 'COMMISSIONER' });
   });
 
-  describe('GET /me/candidates', () => {
-    it.todo('shows a voter only the candidates of their own district');
+  it('shows a voter only the candidates of their own district', async () => {
+    const voter = await db.user(aVoter().inDistrict('CM-2'));
+    const party = await db.party(aParty());
+    await db.candidate(aCandidate().inDistrict('CM-1').forParty(party.id).numbered(1));
+    await db.candidate(aCandidate().inDistrict('CM-2').forParty(party.id).numbered(1));
+
+    const res = await request(app).get('/me/candidates').set('Authorization', authHeader(voter));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ number: 1, party: party.name });
   });
 });
