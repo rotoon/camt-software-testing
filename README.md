@@ -1,3 +1,47 @@
+# 📝 งานส่ง Software Testing Assignment (15%)
+
+repo นี้มี 2 ส่วนตามโจทย์ แต่ละส่วนอยู่คนละ branch ส่วน README ของ workshop (ของอาจารย์) อยู่ด้านล่างหัวข้อนี้
+
+## ส่วนที่ 1 — ทำ workshop ซ้ำ (3–4 ต.ค.)
+
+แต่ละ lab อยู่ branch ของตัวเอง commit ทีละขั้น และอธิบายสิ่งที่ทำ/สังเกตไว้ใน commit message ของแต่ละขั้น ดูได้ด้วย `git log <branch>`
+
+| Branch | เรื่อง | แนวคิดที่ใช้ |
+|---|---|---|
+| `jest/lab/00-setup` | ตั้งเครื่องและรัน test ทุกระดับ | red–green: ทำให้ test แดงแล้วแก้ให้เขียว, เทียบ unit / integration / e2e ด้านความเร็ว การต้องใช้ Docker และความแม่นในการบอกจุดพัง |
+| `jest/lab/01-boundaries` | จัด test case เข้า boundary | test boundary (unit, integration, component, contract, e2e), เลือกระดับต่ำสุดที่ยังมั่นใจพอ, test pyramid |
+| `jest/lab/02-aaa-unit` · `jest/solution/02-aaa-unit` | Arrange–Act–Assert | AAA / four-phase test, test smells (Obscure Test, Eager Test, Assertion Roulette, Conditional Test Logic, ไม่มี assertion), `it.each` แทน loop |
+| `jest/solution/03-test-doubles` | Test doubles | dummy, stub, spy, mock, fake, seam ผ่าน constructor, fake timers กับการ inject `Clock`, ไม่ mock สิ่งที่เราไม่ได้เป็นเจ้าของ |
+| `jest/solution/04-test-data` | Test data | Liquibase (update, tag, rollback, contexts, checksum), Test Data Builder + Faker แบบตั้ง seed, fresh fixture (`truncateAll`), component test, `--runInBand`, สร้าง seed data ด้วย script |
+
+รัน unit test ของ workshop (ไม่ต้องใช้ Docker):
+
+```bash
+git switch jest/solution/04-test-data
+cd app
+npm install
+npm run test:unit
+```
+
+integration test ต้องเปิด Docker ก่อน แล้วรัน `npm run test:integration`
+
+## ส่วนที่ 2 — Unit test ของ Election App (Voter module)
+
+| Branch | เนื้อหา |
+|---|---|
+| `election/original` | code ที่ส่งวิชา Backend ไม่แก้ |
+| `election/unit-test` | code เดิม + unit test ข้อ 2.1 และ 2.3 |
+
+วิธีรัน รายการ test case ตารางที่ตรงกับข้อ 2.3.1–2.3.6 และทฤษฎีที่ใช้ อยู่ใน **README ของ branch `election/unit-test`**
+
+```bash
+git switch election/unit-test
+npm install
+npm test
+```
+
+---
+
 # Software Testing in Real Industry
 
 **Hands-on automated testing workshop & readiness checklist**
