@@ -1,6 +1,11 @@
+import { faker } from "@faker-js/faker";
+
 import * as voterRepo from "@/repositories/VoterRepository";
 import * as userRepo from "@/repositories/UserRepository";
-import { createVoteService } from "@/services/VoterService";
+import {
+  createVoteService,
+  getCandidatesService,
+} from "@/services/VoterService";
 
 jest.mock("@/repositories/VoterRepository", () => ({
   getCandidatesRepository: jest.fn(),
@@ -67,5 +72,38 @@ describe("createVoteService", () => {
       message: "Constituency is closed",
     });
     expect(repo.createVoteRepository).not.toHaveBeenCalled();
+  });
+
+  it("UT-10 saves exactly the generated voter and candidate ids (faker)", async () => {
+    faker.seed(20261010);
+    const userId = faker.number.int({ min: 1, max: 100_000 });
+    const candidateId = faker.number.int({ min: 1, max: 1_000 });
+    const constituencyId = faker.number.int({ min: 1, max: 400 });
+    givenVoterInConstituency(constituencyId);
+    repo.getCandidateInConstituencyRepository.mockResolvedValue({
+      id: candidateId,
+    } as any);
+
+    await createVoteService({ userId, candidateId });
+
+    expect(repo.getCandidateInConstituencyRepository).toHaveBeenCalledWith(
+      constituencyId,
+      candidateId,
+    );
+    expect(repo.createVoteRepository).toHaveBeenCalledWith({
+      userId,
+      candidateId,
+    });
+  });
+});
+
+describe("getCandidatesService", () => {
+  it("UT-08 asks only for the candidates of the given constituency (spy)", async () => {
+    repo.getCandidatesRepository.mockResolvedValue([]);
+
+    await getCandidatesService(3);
+
+    expect(repo.getCandidatesRepository).toHaveBeenCalledTimes(1);
+    expect(repo.getCandidatesRepository.mock.calls[0][0]).toBe(3);
   });
 });
